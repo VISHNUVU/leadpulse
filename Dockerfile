@@ -5,7 +5,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 FROM base AS deps
 RUN corepack enable && corepack prepare pnpm@11.4.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM base AS builder
 RUN corepack enable && corepack prepare pnpm@11.4.0 --activate
