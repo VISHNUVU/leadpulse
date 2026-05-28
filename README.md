@@ -13,12 +13,12 @@ LeadPulse CRM is a WhatsApp-first lead conversion CRM for agencies and small bus
 ## To run locally
 
 1. Install dependencies with your package manager of choice.
-2. Copy `.env.example` to `.env.local` and add Supabase values.
+2. Copy `.env.example` to `.env.local` and add PostgreSQL and session values.
 3. Run `npm run dev` or the equivalent command for your package manager.
 
 ## Next implementation steps
 
-- Wire Supabase Auth actions into `/login`, `/signup`, and `/onboarding`
-- Replace mock `lib/data.ts` with workspace-scoped database queries
-- Add server actions or route handlers for lead CRUD, notes, follow-ups, and template logging
-- Add CSV import and workspace switching persistence
+- Apply [database/leadpulse_postgres.sql](/Users/vishnuvu/Documents/Codex/Lead%20CRM/database/leadpulse_postgres.sql:1) to your PostgreSQL database
+- Set up an SSH tunnel if the VPS database is not publicly exposed
+- Add lead CRUD, notes, follow-up creation, and CSV import
+- Deploy the app on the VPS or add a stable private database connection path

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, ChartBarBig, ClipboardCheck, LayoutDashboard, ListTodo, Settings, Users } from "lucide-react";
 import { ReactNode } from "react";
-import { workspaces } from "@/lib/data";
+import { Workspace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import type { Route } from "next";
 
@@ -17,7 +17,15 @@ const navigation: Array<{ href: Route; label: string; icon: typeof LayoutDashboa
   { href: "/settings", label: "Settings", icon: Settings }
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  workspaces,
+  overdueCount
+}: {
+  children: ReactNode;
+  workspaces: Workspace[];
+  overdueCount: number;
+}) {
   const currentPath = usePathname();
 
   return (
@@ -36,9 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {workspaces.map((workspace) => (
                 <div key={workspace.id} className="rounded-2xl bg-white/5 p-3">
                   <p className="font-medium">{workspace.name}</p>
-                  <p className="text-sm text-[#d7c6b5]">
-                    {workspace.industry} • {workspace.monthlyLeads} leads/mo
-                  </p>
+                <p className="text-sm text-[#d7c6b5]">{workspace.industry} • {workspace.monthlyLeads} leads/mo</p>
                 </div>
               ))}
             </div>
@@ -69,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Bell className="h-4 w-4" />
               </div>
               <div>
-                <p className="font-medium">6 follow-ups overdue</p>
+                <p className="font-medium">{overdueCount} follow-ups overdue</p>
                 <p className="text-sm text-[#cdb89f]">Follow-up speed is your wedge.</p>
               </div>
             </div>

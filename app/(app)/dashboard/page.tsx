@@ -27,7 +27,7 @@ export default async function DashboardPage() {
           <LeadsTable items={snapshot.leads} />
           <div className="grid gap-4 xl:grid-cols-2">
             <SourceChart />
-            <OverdueList />
+            <OverdueList items={snapshot.followups} />
           </div>
         </div>
         {primaryLead && leadDetails ? (

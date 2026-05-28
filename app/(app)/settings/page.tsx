@@ -13,7 +13,7 @@ export default async function SettingsPage() {
         description="Manage workspace roles, WhatsApp templates, and the pieces that matter for an agency-first multi-tenant CRM."
       />
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <RoleMatrix />
+        <RoleMatrix members={snapshot.teamMembers} />
         <div className="space-y-4">
           <Panel>
             <h2 className="text-lg font-semibold text-[#2f251d]">WhatsApp templates</h2>

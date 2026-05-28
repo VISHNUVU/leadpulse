@@ -15,7 +15,7 @@ export default async function LoginPage({
         <p className="text-xs uppercase tracking-[0.35em] text-[#8d7862]">LeadPulse</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[#2f251d]">Sign in to your workspace</h1>
         <p className="mt-3 text-sm text-[#6b5a47]">
-          Use Supabase Auth for email/password and magic links. This screen is ready for the real auth action wiring.
+          Sign in with the PostgreSQL-backed account you created for your LeadPulse workspace.
         </p>
         {params.error ? <p className="mt-4 rounded-2xl bg-[#fce7e3] px-4 py-3 text-sm text-[#ab3b24]">{params.error}</p> : null}
         <form action={signInAction} className="mt-6 space-y-4">

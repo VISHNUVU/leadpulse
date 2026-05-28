@@ -1,7 +1,7 @@
 import { Panel } from "@/components/ui/panel";
-import { teamMembers } from "@/lib/data";
+import { TeamMember } from "@/lib/types";
 
-export function RoleMatrix() {
+export function RoleMatrix({ members }: { members: TeamMember[] }) {
   return (
     <Panel>
       <div className="mb-5">
@@ -9,7 +9,7 @@ export function RoleMatrix() {
         <p className="text-sm text-[#7a6956]">Roles stay narrow so salespeople only see the leads they own.</p>
       </div>
       <div className="space-y-3">
-        {teamMembers.map((member) => (
+        {members.map((member) => (
           <div key={member.id} className="flex items-center justify-between rounded-3xl border border-[rgba(112,92,67,0.12)] bg-white p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f0e6d8] font-semibold text-[#352c22]">

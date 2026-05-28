@@ -1,8 +1,9 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { activitiesByLead, dashboardMetrics, followups, leads, notesByLead, reportRows, teamMembers, whatsappTemplates, workspaces } from "@/lib/data";
-import { createSupabaseServerClient } from "@/lib/supabase";
+import { dbQuery } from "@/lib/db";
+import { hasDatabaseConfig } from "@/lib/env";
+import { getCurrentUser } from "@/lib/auth";
 import { Activity, DashboardMetric, Followup, Lead, Note, ReportRow, TeamMember, WhatsappTemplate, Workspace } from "@/lib/types";
-import { hasSupabaseEnv } from "@/lib/env";
 
 type WorkspaceSnapshot = {
   metrics: DashboardMetric[];
@@ -20,6 +21,56 @@ type LeadDetails = {
   notes: Note[];
 };
 
+type DbWorkspace = {
+  id: string;
+  name: string;
+  industry: string | null;
+  timezone: string;
+  currency: string;
+  lead_count?: string;
+  team_size?: string;
+};
+
+type DbMember = {
+  id: string;
+  full_name: string | null;
+  role: TeamMember["role"];
+};
+
+type DbLead = {
+  id: string;
+  full_name: string;
+  company_name: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  source: string | null;
+  campaign: string | null;
+  status: Lead["status"];
+  quality_status: Lead["qualityStatus"];
+  lead_score: number | null;
+  priority: Lead["priority"] | null;
+  budget_estimate: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  last_contact_at: string | null;
+  next_followup_at: string | null;
+  created_at: string;
+  notes_count?: string;
+};
+
+type DbFollowup = {
+  id: string;
+  lead_id: string;
+  title: string;
+  due_at: string;
+  channel: Followup["channel"] | null;
+  completed_at: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  lead_name: string | null;
+};
+
 function getFallbackSnapshot(): WorkspaceSnapshot {
   return {
     metrics: dashboardMetrics,
@@ -32,166 +83,181 @@ function getFallbackSnapshot(): WorkspaceSnapshot {
   };
 }
 
-function mapLead(record: Record<string, unknown>, membersById: Map<string, TeamMember>): Lead {
-  const assignedTo = String(record.assigned_to ?? "");
-  const member = membersById.get(assignedTo);
+function mapLead(record: DbLead): Lead {
   return {
-    id: String(record.id),
-    name: String(record.full_name ?? "Unnamed lead"),
-    company: String(record.company_name ?? "Workspace lead"),
-    phone: String(record.phone ?? ""),
-    email: String(record.email ?? ""),
-    source: String(record.source ?? "Manual"),
-    campaign: String(record.campaign ?? "Unattributed"),
-    status: (record.status as Lead["status"]) ?? "new",
-    qualityStatus: (record.quality_status as Lead["qualityStatus"]) ?? "warm",
-    priority: (record.priority as Lead["priority"]) ?? "medium",
-    assignedTo,
-    assignedToName: member?.name ?? "Unassigned",
+    id: record.id,
+    name: record.full_name,
+    company: record.company_name ?? "Workspace lead",
+    phone: record.phone ?? "",
+    email: record.email ?? "",
+    source: record.source ?? "Manual",
+    campaign: record.campaign ?? "Unattributed",
+    status: record.status ?? "new",
+    qualityStatus: record.quality_status ?? "warm",
+    priority: record.priority ?? "medium",
+    assignedTo: record.assigned_to ?? "",
+    assignedToName: record.assigned_to_name ?? "Unassigned",
     leadScore: Number(record.lead_score ?? 0),
     budget: record.budget_estimate ? `₹${record.budget_estimate}` : "Not set",
-    city: String(record.city ?? "Unknown"),
-    lastContactAt: String(record.last_contact_at ?? record.created_at ?? new Date().toISOString()),
-    nextFollowupAt: String(record.next_followup_at ?? record.created_at ?? new Date().toISOString()),
-    createdAt: String(record.created_at ?? new Date().toISOString()),
+    city: record.city ?? "Unknown",
+    lastContactAt: record.last_contact_at ?? record.created_at,
+    nextFollowupAt: record.next_followup_at ?? record.created_at,
+    createdAt: record.created_at,
     notesCount: Number(record.notes_count ?? 0),
     tags: []
   };
 }
 
-function mapFollowup(record: Record<string, unknown>, leadsById: Map<string, Lead>, membersById: Map<string, TeamMember>): Followup {
-  const leadId = String(record.lead_id ?? "");
-  const lead = leadsById.get(leadId);
-  const owner = membersById.get(String(record.assigned_to ?? ""));
-  const dueAt = String(record.due_at ?? new Date().toISOString());
-  const completedAt = record.completed_at ? String(record.completed_at) : null;
+function mapFollowup(record: DbFollowup): Followup {
+  const dueTime = new Date(record.due_at).getTime();
   const now = Date.now();
-  const dueTime = new Date(dueAt).getTime();
-
   let status: Followup["status"] = "upcoming";
-  if (completedAt) {
+
+  if (record.completed_at) {
     status = "completed";
   } else if (dueTime < now) {
     status = "overdue";
-  } else if (new Date(dueAt).toDateString() === new Date().toDateString()) {
+  } else if (new Date(record.due_at).toDateString() === new Date().toDateString()) {
     status = "due_today";
   }
 
   return {
-    id: String(record.id),
-    leadId,
-    leadName: lead?.name ?? "Unknown lead",
-    title: String(record.title ?? "Follow-up"),
-    dueAt,
-    owner: owner?.name ?? "Unassigned",
-    channel: (record.channel as Followup["channel"]) ?? "whatsapp",
+    id: record.id,
+    leadId: record.lead_id,
+    leadName: record.lead_name ?? "Unknown lead",
+    title: record.title,
+    dueAt: record.due_at,
+    owner: record.assigned_to_name ?? "Unassigned",
+    channel: record.channel ?? "whatsapp",
     status
   };
+}
+
+async function getPrimaryWorkspaceId(userId: string) {
+  const membershipResult = await dbQuery<{ workspace_id: string }>(
+    `select workspace_id
+     from workspace_members
+     where user_id = $1
+     order by created_at asc
+     limit 1`,
+    [userId]
+  );
+
+  return membershipResult.rows[0]?.workspace_id ?? null;
 }
 
 export async function getWorkspaceSnapshot(): Promise<WorkspaceSnapshot> {
   noStore();
 
-  if (!hasSupabaseEnv()) {
+  if (!hasDatabaseConfig()) {
+    return getFallbackSnapshot();
+  }
+
+  const user = await getCurrentUser();
+  if (!user) {
     return getFallbackSnapshot();
   }
 
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return getFallbackSnapshot();
-    }
-
-    const { data: memberships } = await supabase
-      .from("workspace_members")
-      .select("workspace_id, role, profiles:user_id(id, full_name)")
-      .order("created_at", { ascending: true });
-
-    const primaryWorkspaceId = memberships?.[0]?.workspace_id;
+    const primaryWorkspaceId = await getPrimaryWorkspaceId(user.id);
     if (!primaryWorkspaceId) {
       return getFallbackSnapshot();
     }
 
-    const { data: workspaceRows } = await supabase
-      .from("workspaces")
-      .select("id, name, industry, timezone, currency")
-      .order("created_at", { ascending: true });
+    const [workspaceResult, memberResult, leadResult, followupResult, templateResult] = await Promise.all([
+      dbQuery<DbWorkspace>(
+        `select w.id, w.name, w.industry, w.timezone, w.currency,
+                count(distinct l.id)::text as lead_count,
+                count(distinct wm.user_id)::text as team_size
+         from workspaces w
+         left join leads l on l.workspace_id = w.id
+         left join workspace_members wm on wm.workspace_id = w.id
+         where w.id in (
+           select workspace_id from workspace_members where user_id = $1
+         )
+         group by w.id
+         order by w.created_at asc`,
+        [user.id]
+      ),
+      dbQuery<DbMember>(
+        `select u.id, u.full_name, wm.role
+         from workspace_members wm
+         join users u on u.id = wm.user_id
+         where wm.workspace_id = $1
+         order by wm.created_at asc`,
+        [primaryWorkspaceId]
+      ),
+      dbQuery<DbLead>(
+        `select l.*, u.full_name as assigned_to_name,
+                (select count(*)::text from notes n where n.lead_id = l.id) as notes_count
+         from leads l
+         left join users u on u.id = l.assigned_to
+         where l.workspace_id = $1
+         order by l.created_at desc
+         limit 25`,
+        [primaryWorkspaceId]
+      ),
+      dbQuery<DbFollowup>(
+        `select f.*, l.full_name as lead_name, u.full_name as assigned_to_name
+         from followups f
+         join leads l on l.id = f.lead_id
+         left join users u on u.id = f.assigned_to
+         where f.workspace_id = $1
+         order by f.due_at asc`,
+        [primaryWorkspaceId]
+      ),
+      dbQuery<WhatsappTemplate>(
+        `select id, name, body
+         from whatsapp_templates
+         where workspace_id = $1
+         order by created_at asc`,
+        [primaryWorkspaceId]
+      )
+    ]);
 
-    const resolvedWorkspaces: Workspace[] =
-      workspaceRows?.map((workspace) => ({
-        id: String(workspace.id),
-        name: String(workspace.name),
-        industry: String(workspace.industry ?? "General"),
-        timezone: String(workspace.timezone ?? "Asia/Kolkata"),
-        currency: String(workspace.currency ?? "INR"),
-        monthlyLeads: 0,
-        teamSize: 0
-      })) ?? workspaces;
+    const resolvedWorkspaces: Workspace[] = workspaceResult.rows.map((workspace) => ({
+      id: workspace.id,
+      name: workspace.name,
+      industry: workspace.industry ?? "General",
+      timezone: workspace.timezone,
+      currency: workspace.currency,
+      monthlyLeads: Number(workspace.lead_count ?? 0),
+      teamSize: Number(workspace.team_size ?? 0)
+    }));
 
-    const { data: memberRows } = await supabase
-      .from("workspace_members")
-      .select("user_id, role, profiles:user_id(full_name)")
-      .eq("workspace_id", primaryWorkspaceId);
+    const resolvedMembers: TeamMember[] = memberResult.rows.map((member) => ({
+      id: member.id,
+      name: member.full_name ?? "Team member",
+      role: member.role,
+      avatar: (member.full_name ?? "TM").slice(0, 2).toUpperCase()
+    }));
 
-    const resolvedMembers: TeamMember[] =
-      memberRows?.map((member, index) => ({
-        id: String(member.user_id),
-        name: String((member.profiles as { full_name?: string } | null)?.full_name ?? "Team member"),
-        role: member.role,
-        avatar: String(((member.profiles as { full_name?: string } | null)?.full_name ?? "TM").slice(0, 2)).toUpperCase()
-      })) ?? teamMembers;
-
-    const membersById = new Map(resolvedMembers.map((member) => [member.id, member]));
-
-    const { data: leadRows } = await supabase
-      .from("leads")
-      .select("*")
-      .eq("workspace_id", primaryWorkspaceId)
-      .order("created_at", { ascending: false });
-
-    const resolvedLeads = (leadRows?.map((lead) => mapLead(lead, membersById)) ?? []).slice(0, 25);
-    const leadsById = new Map(resolvedLeads.map((lead) => [lead.id, lead]));
-
-    const { data: followupRows } = await supabase
-      .from("followups")
-      .select("*")
-      .eq("workspace_id", primaryWorkspaceId)
-      .order("due_at", { ascending: true });
-
-    const resolvedFollowups = followupRows?.map((followup) => mapFollowup(followup, leadsById, membersById)) ?? [];
-
-    const { data: templateRows } = await supabase
-      .from("whatsapp_templates")
-      .select("id, name, body")
-      .eq("workspace_id", primaryWorkspaceId)
-      .order("created_at", { ascending: true });
-
-    const resolvedTemplates =
-      templateRows?.map((template) => ({
-        id: String(template.id),
-        name: String(template.name),
-        body: String(template.body)
-      })) ?? whatsappTemplates;
+    const resolvedLeads = leadResult.rows.map(mapLead);
+    const resolvedFollowups = followupResult.rows.map(mapFollowup);
+    const resolvedTemplates = templateResult.rows;
 
     const newLeadsCount = resolvedLeads.filter((lead) => lead.status === "new").length;
-    const qualifiedCount = resolvedLeads.filter((lead) => lead.status === "qualified" || lead.status === "proposal_sent" || lead.status === "won").length;
+    const qualifiedCount = resolvedLeads.filter((lead) => ["qualified", "proposal_sent", "won"].includes(lead.status)).length;
     const dueTodayCount = resolvedFollowups.filter((followup) => followup.status === "due_today" || followup.status === "overdue").length;
-
-    const resolvedMetrics: DashboardMetric[] = [
-      { label: "New Leads", value: String(newLeadsCount), trend: "Live from workspace data", tone: "positive" },
-      { label: "Due Today", value: String(dueTodayCount), trend: "Includes overdue follow-ups", tone: dueTodayCount > 0 ? "warning" : "neutral" },
-      { label: "Qualified", value: String(qualifiedCount), trend: "Qualified and proposal-ready leads", tone: "positive" },
-      { label: "First Response", value: "Track next", trend: "Wire activity timestamps for SLA reporting", tone: "neutral" }
-    ];
+    const firstResponseMinutes = resolvedLeads.length
+      ? Math.round(
+          resolvedLeads.reduce((total, lead) => {
+            const created = new Date(lead.createdAt).getTime();
+            const contacted = new Date(lead.lastContactAt).getTime();
+            return total + Math.max(0, Math.round((contacted - created) / 60000));
+          }, 0) / resolvedLeads.length
+        )
+      : 0;
 
     return {
-      metrics: resolvedMetrics,
-      leads: resolvedLeads.length > 0 ? resolvedLeads : leads,
-      followups: resolvedFollowups.length > 0 ? resolvedFollowups : followups,
+      metrics: [
+        { label: "New Leads", value: String(newLeadsCount), trend: "Live from PostgreSQL", tone: "positive" },
+        { label: "Due Today", value: String(dueTodayCount), trend: "Overdue items included", tone: dueTodayCount > 0 ? "warning" : "neutral" },
+        { label: "Qualified", value: String(qualifiedCount), trend: "Qualified and proposal-ready leads", tone: "positive" },
+        { label: "First Response", value: `${firstResponseMinutes || 0} min`, trend: "Calculated from lead activity timestamps", tone: "neutral" }
+      ],
+      leads: resolvedLeads,
+      followups: resolvedFollowups,
       reportRows,
       workspaces: resolvedWorkspaces,
       teamMembers: resolvedMembers,
@@ -206,7 +272,7 @@ export async function getLeadDetails(leadId: string): Promise<LeadDetails> {
   const snapshot = await getWorkspaceSnapshot();
   const fallbackLead = snapshot.leads.find((lead) => lead.id === leadId) ?? null;
 
-  if (!hasSupabaseEnv()) {
+  if (!hasDatabaseConfig()) {
     return {
       lead: fallbackLead,
       activities: activitiesByLead[leadId] ?? [],
@@ -215,9 +281,46 @@ export async function getLeadDetails(leadId: string): Promise<LeadDetails> {
   }
 
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: leadRow } = await supabase.from("leads").select("*").eq("id", leadId).maybeSingle();
+    const [leadResult, activityResult, noteResult] = await Promise.all([
+      dbQuery<DbLead>(
+        `select l.*, u.full_name as assigned_to_name,
+                (select count(*)::text from notes n where n.lead_id = l.id) as notes_count
+         from leads l
+         left join users u on u.id = l.assigned_to
+         where l.id = $1
+         limit 1`,
+        [leadId]
+      ),
+      dbQuery<{
+        id: string;
+        activity_type: Activity["type"];
+        description: string;
+        created_at: string;
+        actor: string | null;
+      }>(
+        `select la.id, la.activity_type, la.description, la.created_at, u.full_name as actor
+         from lead_activities la
+         left join users u on u.id = la.user_id
+         where la.lead_id = $1
+         order by la.created_at desc`,
+        [leadId]
+      ),
+      dbQuery<{
+        id: string;
+        note: string;
+        created_at: string;
+        author: string | null;
+      }>(
+        `select n.id, n.note, n.created_at, u.full_name as author
+         from notes n
+         left join users u on u.id = n.user_id
+         where n.lead_id = $1
+         order by n.created_at desc`,
+        [leadId]
+      )
+    ]);
 
+    const leadRow = leadResult.rows[0];
     if (!leadRow) {
       return {
         lead: fallbackLead,
@@ -226,39 +329,24 @@ export async function getLeadDetails(leadId: string): Promise<LeadDetails> {
       };
     }
 
-    const membersById = new Map(snapshot.teamMembers.map((member) => [member.id, member]));
-    const lead = mapLead(leadRow, membersById);
-
-    const { data: activityRows } = await supabase
-      .from("lead_activities")
-      .select("id, activity_type, description, created_at, profiles:user_id(full_name)")
-      .eq("lead_id", leadId)
-      .order("created_at", { ascending: false });
-
-    const { data: noteRows } = await supabase
-      .from("notes")
-      .select("id, note, created_at, profiles:user_id(full_name)")
-      .eq("lead_id", leadId)
-      .order("created_at", { ascending: false });
-
     return {
-      lead,
+      lead: mapLead(leadRow),
       activities:
-        activityRows?.map((activity) => ({
-          id: String(activity.id),
-          type: (activity.activity_type as Activity["type"]) ?? "note",
+        activityResult.rows.map((activity) => ({
+          id: activity.id,
+          type: activity.activity_type ?? "note",
           title: String(activity.activity_type ?? "activity").replaceAll("_", " "),
-          description: String(activity.description ?? ""),
-          createdAt: String(activity.created_at ?? new Date().toISOString()),
-          actor: String((activity.profiles as { full_name?: string } | null)?.full_name ?? "Team member")
-        })) ?? activitiesByLead[leadId] ?? [],
+          description: activity.description,
+          createdAt: activity.created_at,
+          actor: activity.actor ?? "Team member"
+        })) ?? [],
       notes:
-        noteRows?.map((note) => ({
-          id: String(note.id),
-          author: String((note.profiles as { full_name?: string } | null)?.full_name ?? "Team member"),
-          body: String(note.note ?? ""),
-          createdAt: String(note.created_at ?? new Date().toISOString())
-        })) ?? notesByLead[leadId] ?? []
+        noteResult.rows.map((note) => ({
+          id: note.id,
+          author: note.author ?? "Team member",
+          body: note.note,
+          createdAt: note.created_at
+        })) ?? []
     };
   } catch {
     return {

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Panel } from "@/components/ui/panel";
-import { followups } from "@/lib/data";
+import { Followup } from "@/lib/types";
 import { formatRelativeDate } from "@/lib/utils";
 
-export function OverdueList() {
-  const overdue = followups.filter((item) => item.status === "overdue" || item.status === "due_today");
+export function OverdueList({ items }: { items: Followup[] }) {
+  const overdue = items.filter((item) => item.status === "overdue" || item.status === "due_today");
 
   return (
     <Panel>
