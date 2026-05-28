@@ -22,3 +22,15 @@ LeadPulse CRM is a WhatsApp-first lead conversion CRM for agencies and small bus
 - Set up an SSH tunnel if the VPS database is not publicly exposed
 - Add lead CRUD, notes, follow-up creation, and CSV import
 - Deploy the app on the VPS or add a stable private database connection path
+
+## Docker deployment
+
+Build and run locally:
+
+```bash
+docker build -t leadpulse-crm .
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL=postgresql://user:password@host:5432/leadpulse_crm \
+  -e SESSION_SECRET=change-me \
+  leadpulse-crm
+```

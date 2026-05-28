@@ -7,17 +7,52 @@ import { cn, formatRelativeDate } from "@/lib/utils";
 export function LeadsTable({ items }: { items: Lead[] }) {
   return (
     <Panel className="overflow-hidden p-0">
-      <div className="flex items-center justify-between border-b border-[rgba(112,92,67,0.1)] px-5 py-4">
+      <div className="flex flex-col gap-3 border-b border-[rgba(112,92,67,0.1)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div>
           <h2 className="text-lg font-semibold text-[#2f251d]">Live lead queue</h2>
           <p className="text-sm text-[#7a6956]">Searchable, assignable, and campaign-aware.</p>
         </div>
-        <div className="flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-[#f3ede3] px-3 py-1.5 text-[#5a4d3f]">High priority</span>
           <span className="rounded-full bg-[#f3ede3] px-3 py-1.5 text-[#5a4d3f]">Meta Ads</span>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="space-y-3 p-4 md:hidden">
+        {items.map((lead) => (
+          <Link
+            key={lead.id}
+            href={`/leads/${lead.id}`}
+            className="block rounded-[24px] border border-[rgba(112,92,67,0.12)] bg-white p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold text-[#352c22]">{lead.name}</p>
+                <p className="text-sm text-[#7a6956]">{lead.company}</p>
+              </div>
+              <Badge tone={lead.qualityStatus}>{lead.qualityStatus}</Badge>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[#8d7862]">Campaign</p>
+                <p className="mt-1 text-[#352c22]">{lead.campaign}</p>
+              </div>
+              <div>
+                <p className="text-[#8d7862]">Assigned</p>
+                <p className="mt-1 text-[#352c22]">{lead.assignedToName}</p>
+              </div>
+              <div>
+                <p className="text-[#8d7862]">Status</p>
+                <p className="mt-1 capitalize text-[#352c22]">{lead.status.replaceAll("_", " ")}</p>
+              </div>
+              <div>
+                <p className="text-[#8d7862]">Next follow-up</p>
+                <p className="mt-1 text-[#352c22]">{formatRelativeDate(lead.nextFollowupAt)}</p>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full divide-y divide-[rgba(112,92,67,0.1)]">
           <thead className="bg-[#fbf6f0]">
             <tr className="text-left text-xs uppercase tracking-[0.2em] text-[#8d7862]">

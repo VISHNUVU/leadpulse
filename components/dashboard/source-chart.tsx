@@ -6,7 +6,7 @@ export function SourceChart() {
 
   return (
     <Panel>
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[#2f251d]">Lead source quality</h2>
           <p className="text-sm text-[#7a6956]">Which campaigns turn into qualified opportunities.</p>
@@ -16,7 +16,7 @@ export function SourceChart() {
       <div className="space-y-4">
         {reportRows.map((row) => (
           <div key={row.label}>
-            <div className="mb-2 flex items-center justify-between text-sm text-[#5a4d3f]">
+            <div className="mb-2 flex flex-col gap-1 text-sm text-[#5a4d3f] sm:flex-row sm:items-center sm:justify-between">
               <span>{row.label}</span>
               <span>
                 {row.qualified}/{row.leads} qualified

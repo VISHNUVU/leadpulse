@@ -1,0 +1,9 @@
+.git
+.gitignore
+.next
+.pnpm-store
+node_modules
+.env.local
+tsconfig.tsbuildinfo
+.next-swc
+*.log

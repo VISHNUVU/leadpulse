@@ -27,13 +27,15 @@ export function LeadDetailRail({
   return (
     <div className="space-y-4">
       <Panel>
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm text-[#7a6956]">Selected lead</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#2f251d]">{lead.name}</h2>
             <p className="mt-1 text-sm text-[#6b5a47]">{lead.company}</p>
           </div>
-          <Badge tone={lead.qualityStatus}>{lead.qualityStatus}</Badge>
+          <Badge className="w-fit" tone={lead.qualityStatus}>
+            {lead.qualityStatus}
+          </Badge>
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -47,12 +49,12 @@ export function LeadDetailRail({
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
-          <LinkButton href={createWhatsAppLink(lead.phone, message)} className="gap-2">
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <LinkButton href={createWhatsAppLink(lead.phone, message)} className="w-full gap-2 sm:w-auto">
             <MessageCircle className="h-4 w-4" />
             WhatsApp now
           </LinkButton>
-          <LinkButton href={`tel:${lead.phone}`} variant="secondary" className="gap-2">
+          <LinkButton href={`tel:${lead.phone}`} variant="secondary" className="w-full gap-2 sm:w-auto">
             <PhoneCall className="h-4 w-4" />
             Call lead
           </LinkButton>
@@ -75,7 +77,7 @@ export function LeadDetailRail({
           ) : (
             notes.map((note) => (
               <div key={note.id} className="rounded-3xl bg-[#fbf6f0] p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <p className="font-medium text-[#352c22]">{note.author}</p>
                   <p className="text-xs text-[#7a6956]">{formatRelativeDate(note.createdAt)}</p>
                 </div>
